@@ -1,0 +1,25 @@
+@AbapCatalog.sqlViewName: 'ZVH_DESC_MGRP'
+@AbapCatalog.compiler.compareFilter: true
+@AbapCatalog.preserveKey: true
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'Value Help for Material Group and description'
+//@ClientDependent: false
+@Search.searchable: true
+@OData.publish: true
+@VDM.viewType: #CONSUMPTION
+define view ZVH_MGRP_DEC as select distinct from  /bi0/tmatl_group 
+{
+  @EndUserText.label: 'Material Group'
+  @Search.defaultSearchElement: true
+  @Search.fuzzinessThreshold: 0.8
+  @Search.ranking: #HIGH
+@ObjectModel.text.element: ['txtsh']
+key matl_group,
+  @EndUserText.label: 'Description'
+@Semantics.text: true
+  @Search.defaultSearchElement: true
+  @Search.fuzzinessThreshold: 0.8
+  @Search.ranking: #HIGH
+    txtsh
+       
+}where matl_group like 'Z%'
