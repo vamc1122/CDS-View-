@@ -1,0 +1,21 @@
+
+@AbapCatalog.sqlViewName: 'ZPATH_EXP'
+@AbapCatalog.compiler.compareFilter: true
+@AbapCatalog.preserveKey: true
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'path expressions'
+define view zvamsi9 as select from zvamsi8
+{
+  key vbeln,
+      vbtyp,
+      CUSTOMER,
+      @DefaultAggregation: #SUM
+      netwr as net_price,
+      posnr,
+      
+      
+   // association 
+      BILLING[inner].SalesDocument,   // by default cds view is a left outer join       
+      _CUSTOMER[Customer = '0000001000'].CustomerName  // path expressions
+        
+}
