@@ -1,0 +1,21 @@
+@AbapCatalog.sqlViewName: 'ZASSOCIATIONS'
+@AbapCatalog.compiler.compareFilter: true
+@AbapCatalog.preserveKey: true
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'ASSOCIATIONS'
+define view zvamsi8 as select from vbak as SHEADER
+association [1..1] to vbap as SITEM on SHEADER.vbeln = SITEM.vbeln 
+association [1..*] to I_BillingDocumentItem as BILLING on SHEADER.vbeln = BILLING.SalesDocument
+//association [1..*] to I_Material AS MATERIAL ON SITEM.matnr = MATERIAL.MATNR
+association [1] to I_Customer as _CUSTOMER on SHEADER.kunnr = _CUSTOMER.Customer
+
+{
+    key SHEADER.vbeln,
+        SHEADER.vbtyp,
+        SHEADER.kunnr as CUSTOMER,   // on condition fields mandatory
+        SHEADER.netwr,
+   // association as public
+        SITEM.posnr, // ad hoc association 
+        BILLING,
+        _CUSTOMER
+}
