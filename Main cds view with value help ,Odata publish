@@ -1,0 +1,293 @@
+
+DATA DEFINITION : 
+ZSALES_DELIV_FIORI
+ZSALES_DELIV_PLAN
+ZTF_PLANNING_DATA
+ZTF_SALES_DETAILS
+ZVH_MGRP_DEC
+
+Class :
+ZCL_GET_SALES_DETAILS
+ZCL_TF_PLANNING_DATA
+ZCL_ZSALES_DELIV_FIORI
+ZCL_ZSALES_DELIV_PLAN
+ZCL_ZSD_O01_Q0001
+ZCL_ZVH_MGRP_DEC
+
+
+
+Main CDS View Class:
+class ZCL_GET_SALES_DETAILS definition public.
+
+public section.
+interfaces if_amdp_marker_hdb.
+class-methods get_data for table function ztf_sales_details.
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+ENDCLASS.
+
+
+CLASS ZCL_GET_SALES_DETAILS IMPLEMENTATION.
+ method  get_data by database function for hdb
+                  language sqlscript options read-only
+                  using /BIC/AZSD_O0800 /BI0/TMATERIAL  /BI0/TMATL_GROUP.
+
+*it_preqty = select  from  "/BIC/AZSD_O0800" where DOC_NUMBER = '0070010104' ;
+
+monthly_totals =
+  SELECT CALMONTH, MATL_GROUP, doc_type,
+CASE
+  WHEN CALMONTH IS NULL
+       OR LENGTH(CALMONTH) < 6
+       OR LEFT( CALMONTH, 6) IN ('000000', '')
+       THEN '000000'
+  ELSE TO_VARCHAR(CAST(LEFT(CALMONTH, 4) AS INTEGER) + 1) || RIGHT(CALMONTH, 2)
+END AS PREYEAR_MONTH,
+         SUM(inv_qty) AS month_total
+  FROM "/BIC/AZSD_O0800"
+*  WHERE PLANT IN ('1700', '2700' )
+*  and matl_group in ( 'Z043','Z049','Z045','Z047',
+*  'Z050','Z051','Z069','Z070','Z072','Z075','Z074','Z077' )
+  GROUP BY CALMONTH ,matl_group,doc_type;
+
+curr_qty =
+SELECT
+  CALMONTH,
+  MATL_GROUP,
+  doc_type,
+  SUM(INV_QTY) AS TOTAL_INV_QTY
+FROM "/BIC/AZSD_O0800"
+*WHERE PLANT IN ('1700', '2700')
+GROUP BY CALMONTH, MATL_GROUP, doc_type;
+
+ final =  select a.DOC_NUMBER as DOC_NUMBER,
+                a.S_ORD_ITEM as S_ORD_ITEM,
+                a.BILL_NUM   as BILL_NUM,
+                a.BILL_ITEM  as BILL_ITEM,
+                a.RECORDMODE as RECORDMODE,
+                a.COMP_CODE  as COMP_CODE,
+                a.PLANT      as Plant,
+                a.SHIP_TO    as SHIP_TO,
+                a.SOLD_TO    as SOLD_TO,
+                a.BILLTOPRTY as BILLTOPRTY,
+                a.PAYER      as PAYER,
+                a.MATERIAL   as MATERIAL,
+                b.txtmd      as MAT_Desc,
+                a.DOC_TYPE   as DOC_TYPE,
+                a.bill_type  as BILL_TYPE,
+                a.DISTR_CHAN as DISTR_CHAN,
+                a.DIVISION   as DIVISION,
+                a.BASE_UOM   as BASE_UOM,
+                a.CALDAY     as CALDAY,
+                a.CALMONTH   as CALMONTH,
+                a.FISCYEAR   as FISCYEAR,
+*                //premonth
+CASE
+  WHEN a.CALMONTH IS NULL
+       OR LENGTH(a.CALMONTH) < 6
+       OR LEFT( a.CALMONTH, 6) IN ('000000', '')
+       THEN '000000'
+  ELSE TO_VARCHAR(CAST(LEFT(a.CALMONTH, 4) AS INTEGER) - 1) || RIGHT(a.CALMONTH, 2)
+END AS PREYEAR_MONTH,
+                a.CALWEEK    as CALWEEK,
+                a.FISCPER    as FISCPER,
+*                //preyear
+CASE
+  WHEN a.FISCYEAR IS NULL
+       OR LENGTH(a.FISCYEAR) < 4
+       OR LEFT(a.FISCYEAR, 4) IN ('0000', '')
+       THEN '0000'
+  ELSE TO_VARCHAR(CAST(LEFT(a.FISCYEAR, 4) AS INTEGER) - 1)
+END AS PREYEAR,
+                a.FISCVARNT  as FISCVARNT,
+                a.MATL_GROUP as MATL_GROUP,
+                c.txtsh      as MGRP_desc,
+                a.BILL_DATE  as BILL_DATE,
+                a.NETVAL_INV as NETVAL_INV,
+                a.DOC_CURRCY as DOC_CURRCY,
+                a.inv_qty    as INV_QTY,
+                a.unit       as UNIT,
+                a.quantity   as QUANTITY,
+                m.month_total AS PREINV_QTY,
+                q.TOTAL_INV_QTY AS Row_PREINV_QTY,
+ ROW_NUMBER() OVER (
+      PARTITION BY a.CALMONTH, a.MATL_GROUP, a.doc_type
+      ORDER BY a.DOC_NUMBER
+    ) AS rn,
+*  CASE
+*    WHEN row_number() OVER (PARTITION BY a.CALMONTH order by  a.calmonth ) = 1
+*    THEN m.month_total
+*    ELSE NULL
+*  END AS Row_PREINV_QTY,
+
+                a.sales_unit as SALES_UNIT
+  from "/BIC/AZSD_O0800" as a
+  left outer join  "/BI0/TMATERIAL" as b
+  ON a.material  = b.material left outer join "/BI0/TMATL_GROUP" as c
+  on a.MATL_GROUP = c.matl_group left outer JOIN :monthly_totals AS m  ON a.calmonth  = m.PREYEAR_MONTH and a.matl_group = m.MATL_GROUP and a.doc_type =  m.doc_type
+  left outer join :curr_qty as q on a.calmonth  = q.CALMONTH and a.matl_group = q.MATL_GROUP and a.doc_type =  q.doc_type;
+*   where a.PLANT in ( '1700','2700' ) ;
+*    and a.MATL_GROUP in ( 'Z043','Z049','Z045','Z047',
+*  'Z050','Z051','Z069','Z070','Z072','Z072','Z075','Z074','Z077' );
+*    order by DOC_NUMBER ,  S_ORD_ITEM;
+
+RETURN
+SELECT          DOC_NUMBER,
+                S_ORD_ITEM,
+                BILL_NUM,
+                BILL_ITEM,
+                RECORDMODE,
+                COMP_CODE,
+                Plant,
+                SHIP_TO,
+                SOLD_TO,
+                BILLTOPRTY,
+                PAYER,
+                MATERIAL,
+                MAT_Desc,
+                DOC_TYPE,
+                BILL_TYPE,
+                DISTR_CHAN,
+                DIVISION,
+                BASE_UOM,
+                CALDAY,
+                CALMONTH,
+                FISCYEAR,
+               PREYEAR_MONTH,
+                CALWEEK,
+                FISCPER,
+               PREYEAR,
+                FISCVARNT,
+                MATL_GROUP,
+                MGRP_desc,
+                BILL_DATE,
+                NETVAL_INV,
+                DOC_CURRCY,
+                INV_QTY,
+                UNIT,
+                QUANTITY,
+                PREINV_QTY,
+                Row_PREINV_QTY,
+                sales_unit as SALES_UNIT
+ FROM :final
+WHERE rn = 1;
+
+
+endmethod.
+ENDCLASS.
+
+
+Main CDS View :
+@AbapCatalog.sqlViewName: 'ZSDB_SL_DL_Fiori'
+@AbapCatalog.compiler.compareFilter: true
+//@AbapCatalog.preserveKey: true
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'SDB Sales Deliv Fiori'
+@Metadata.ignorePropagatedAnnotations: true
+@OData.publish: true
+@VDM.viewType: #CONSUMPTION
+
+//@Search.ranking: #HIGH
+//@Search.searchable: true
+
+define view Zsales_Deliv_Fiori as select from ztf_sales_details as A
+left outer  join ztf_planning_data as B on 
+A.MATL_GROUP = B.MATL_GROUP and
+A.CALMONTH = B.CALMONTH 
+association  [0..1] to ZVH_MGRP_DEC as _MGRPDESC on $projection.MATL_GROUP = _MGRPDESC.matl_group
+
+
+{
+          key   A.DOC_NUMBER as DOC_NUMBER,
+//                A.S_ORD_ITEM as S_ORD_ITEM,
+//                A.BILL_NUM   as BILL_NUM,
+//                A.BILL_ITEM  as BILL_ITEM,
+//                A.RECORDMODE as RECORDMODE,
+//                A.COMP_CODE  as COMP_CODE,
+                A.PLANT      as Plant,
+//                A.SHIP_TO    as SHIP_TO,
+//                A.SOLD_TO    as SOLD_TO,
+//                A.BILLTOPRTY as BILLTOPRTY,
+//                A.PAYER      as PAYER,
+//                A.MATERIAL   as MATERIAL,
+//                A.MAT_Desc   as MAT_Desc,
+                A.DOC_TYPE   as DOC_TYPE,
+//                A.BILL_TYPE  as BILL_TYPE,
+//                A.DISTR_CHAN as DISTR_CHAN,
+//                A.DIVISION   as DIVISION,
+//                A.BASE_UOM   as BASE_UOM,
+@Semantics.calendar.date: true
+    cast ( A.CALDAY as abap.char(8)) as  CALDAY,
+@Semantics.calendar.month: true
+    cast ( A.CALMONTH as abap.char(6)) as  CALMONTH,
+//@Semantics.calendar.week: true
+//cast ( A.CALWEEK as abap.char(6)) as  CALWEEK,
+////                A.CALWEEK    as CALWEEK,
+//                A.FISCPER    as FISCPER,
+//                A.FISCVARNT  as FISCVARNT,
+//                A.FISCYEAR   as FISCYEAR,
+//                A.PREYEAR_MONTH as PREMONTH,
+//                A.PREYEAR as PREYEAR,
+//@Consumption.valueHelp: '_MGRPDESC' 
+//@ObjectModel.foreignKey.association: '_MGRPDESC'
+//@UI.selectionField: [{ position: 10 }]
+//@UI.lineItem: [{ position: 10 }]
+@Consumption.valueHelpDefinition: [{
+  entity: {
+    name: '_MGRPDESC',
+    element: 'MATL_GROUP'
+  }
+}]
+@ObjectModel.foreignKey.association: '_MGRPDESC'
+//@ObjectModel.text.association: '_MGRPDESC'
+@ObjectModel.text.element: ['MatlGroupDesc']
+@UI.textArrangement: #TEXT_FIRST
+                A.MATL_GROUP as MATL_GROUP,
+//                A.MGRP_desc  as MatlGroupDesc,
+                _MGRPDESC.txtsh as MatlGroupDesc,
+//                A.BILL_DATE  as BILL_DATE,
+
+//  @Semantics.amount.currencyCode: 'DOC_CURRCY'
+//                A.NETVAL_INV as NETVAL_INV,
+//                A.DOC_CURRCY as DOC_CURRCY,
+@DefaultAggregation: #SUM
+  @Semantics.quantity.unitOfMeasure: 'SALES_UNIT'
+                A.INV_QTY    as INV_QTY,
+//@DefaultAggregation: #MIN  // avoids multiple rows showing the same value
+@DefaultAggregation: #SUM
+@Semantics.quantity.unitOfMeasure: 'SALES_UNIT'
+                A.Row_PREINV_QTY as CURR_MONTH_QTY,
+@DefaultAggregation: #SUM
+  @Semantics.quantity.unitOfMeasure: 'SALES_UNIT'
+                A.PREINV_QTY as PREINV_QTY,
+@DefaultAggregation: #MIN
+  @Semantics.quantity.unitOfMeasure: 'SALES_UNIT'
+                  B.ROW_PLAN_QTY  as MONTH_PLAN_QTY ,
+//                  B.ROW_PLAN_QTY as MONTH_PLAN_QTY ,
+//  @Semantics.quantity.unitOfMeasure: 'SALES_UNIT'
+//                A.QUANTITY   as QUANTITY,
+//                A.UNIT       as UNIT,
+                A.SALES_UNIT as SALES_UNIT,
+//@Semantics.calendar.DATE: true
+//                B.ZDATE    as PLAN_DATE_ABP,
+//                B.MAT      as PLAN_MATERIAL,
+//                B.RECORDMODE as PLAN_RECORDMODE,
+//@Semantics.calendar.date: true  
+//     cast ( A.BILL_DATE as abap.char(8)) as  BILL_DATE,
+//  @Semantics.quantity.unitOfMeasure: 'SALES_UNIT'
+//@DefaultAggregation: #SUM
+//                B.ZQTY     as PLAN_QTY,
+
+//                B.UNIT     as PLAN_UNIT,
+//                B.MATL_GROUP as PLAN_GROUP,
+//@Semantics.calendar.month: true
+//    cast ( B.CALMONTH as abap.char(6)) as  PLAN_CALMONTH,
+//                B.CALYEAR  as PLAN_YEAR,
+//@Semantics.calendar.week: true
+//cast ( B.CALWEEK as abap.char(6)) as  PLAN_CALWEEK,
+//                B.FISCVARNT as PLAN_FISCVARNT,
+//                B.FISCYEAR as PLAN_FISCYEAR,
+                _MGRPDESC
+}
+
+
