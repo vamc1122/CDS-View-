@@ -1,0 +1,9 @@
+@AbapCatalog.sqlViewName: 'ZCDS_IN_CDS'
+@EndUserText.label: 'CDS WITHIN THE CDS VIEW'
+define view zvamsi5 as select from zvamsi4 ( p_mtype : 'ZFGP', p_mgroup : 'F01' )
+{
+  key matnr,
+      mtart,
+      matkl,
+      ntgew 
+}
