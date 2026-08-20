@@ -1,0 +1,27 @@
+@AbapCatalog.sqlViewName: 'ZCASE_PRICE'
+@AbapCatalog.compiler.compareFilter: true
+@AbapCatalog.preserveKey: true
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'convertion exit, if and case, price manipulation'
+define view zvamsi6 as select from ekpo
+{
+  key  ebeln,
+      ebelp,
+     ltrim( matnr, '0' ) as material_number,
+   case matkl
+     when '01' then 'india'
+     when 'R01' then 'TEAT MATERIAL'
+     else 'others'
+     end as material_group,
+     
+     
+    case lgort
+    when 'LG01' then 'STRL1'
+    when 'GP01' then 'STRL2'
+    else 'others'
+    end as STR_LOC,
+    
+     (netpr-100) as DISCOUNT_PRICE
+
+
+}
