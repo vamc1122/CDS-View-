@@ -1,0 +1,88 @@
+Class : 
+
+class ZCL_TF_PLANNING_DATA definition public .
+
+
+public section.
+interfaces if_amdp_marker_hdb.
+class-methods get_plan_data for table function ZTF_PLANNING_DATA.
+protected section.
+private section.
+ENDCLASS.
+
+
+CLASS ZCL_TF_PLANNING_DATA IMPLEMENTATION.
+method get_plan_data by database function for hdb
+                  language sqlscript options read-only
+                  using /BIC/AZSD_O0700.
+
+mgrp_qty_monthly =
+  SELECT
+    MATL_GROUP,
+    CALMONTH,
+    SUM("/BIC/ZQTY_SDB") AS MONTHLY_ZQTY
+  FROM "/BIC/AZSD_O0700"
+  where CALMONTH <> '000000'
+*   and
+*   matl_group in ( 'Z043','Z049','Z045','Z047',
+*  'Z050','Z051','Z069','Z070','Z072','Z075','Z074','Z077' )
+  GROUP BY  CALMONTH, MATL_GROUP;
+
+ranked_plan =
+  SELECT
+    a.CALMONTH       AS CALMONTH,
+    a.MATL_GROUP     AS MATL_GROUP,
+    a."/BIC/ZDATE_FI" AS ZDATE,
+    a."/BIC/ZPLAN_MAT" AS MAT,
+    a.RECORDMODE     AS RECORDMODE,
+    a."/BIC/ZQTY_SDB" AS ZQTY,
+    a.UNIT           AS UNIT,
+    a.CALYEAR        AS CALYEAR,
+    a.CALWEEK        AS CALWEEK,
+    a.FISCVARNT      AS FISCVARNT,
+    a.FISCYEAR       AS FISCYEAR,
+    COALESCE(b.MONTHLY_ZQTY, 0) AS MONTHLY_ZQTY,
+
+    ROW_NUMBER() OVER (
+      PARTITION BY a.CALMONTH, a.MATL_GROUP
+      ORDER BY a.MATL_GROUP DESC
+    ) AS rn
+
+
+  FROM "/BIC/AZSD_O0700" AS a
+  LEFT OUTER JOIN :mgrp_qty_monthly AS b
+*    ON a.MATL_GROUP = b.MATL_GROUP
+  on a.CALMONTH   = b.CALMONTH and a.MATL_GROUP = b.MATL_GROUP;
+
+
+RETURN
+SELECT
+  CALMONTH,
+  MATL_GROUP,
+  ZDATE,
+  MAT,
+  RECORDMODE,
+  ZQTY,
+  UNIT,
+  CALYEAR,
+  CALWEEK,
+  FISCVARNT,
+  FISCYEAR,
+  MONTHLY_ZQTY,
+  rn as PLAN_ROW_RANK,
+  CASE
+    WHEN rn = 1 THEN MONTHLY_ZQTY
+    ELSE null
+  END AS ROW_PLAN_QTY
+*MONTHLY_ZQTY AS ROW_PLAN_QTY
+*    CASE
+*    WHEN row_number() OVER (PARTITION BY CALMONTH ,MATL_GROUP  order by  calmonth ) = 1
+*    THEN MONTHLY_ZQTY
+*    ELSE NULL
+*  END AS ROW_PLAN_QTY
+
+FROM :ranked_plan
+where rn = 1;
+endmethod.
+ENDCLASS.
+
